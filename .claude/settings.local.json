@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:relingo.net)",
+      "Bash(npm --version)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(python -m json.tool)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:marketplace.microsoft.com)",
+      "WebSearch",
+      "WebFetch(domain:langbly.com)",
+      "Bash(node -e \"const {TIER1,TIER2,TIER3}=require\\(''./src/shared/wordFrequency.js''\\); console.log\\(''T1:'',TIER1.size,''T2:'',TIER2.size,''T3:'',TIER3.size\\)\")",
+      "Bash(node -e \"import\\(''./src/shared/wordFrequency.js''\\).then\\(m=>console.log\\(''T1:'',m.TIER1.size,''T2:'',m.TIER2.size,''T3:'',m.TIER3.size\\)\\)\")",
+      "Bash(find c:/Users/Q/Coding/claudecode/dist -type f ! -name *.js ! -name *.map ! -name *.json)",
+      "Bash(grep -E \"\\\\.\\(png|svg|ico|jpg|jpeg|gif\\)$\")",
+      "Bash(file c:/Users/Q/Coding/claudecode/*)",
+      "Bash(node generate-icons.js)",
+      "Bash(node generate-icons.cjs)",
+      "Bash(gh auth:*)",
+      "Bash(git --version)",
+      "Bash(git config:*)"
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "英语助手",
+  "version": "2.0.0",
+  "description": "选中英文单词，立即翻译并收藏到单词本",
+  "permissions": ["storage", "tabs", "downloads", "alarms", "notifications"],
+  "host_permissions": ["https://translate.googleapis.com/*", "https://api-free.deepl.com/*", "https://api.mymemory.translated.net/*", "https://api.langbly.com/*", "https://api.dictionaryapi.dev/*", "https://api.anthropic.com/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_title": "英语助手",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/content/youtube-bridge.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/content/youtube.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "src/background/index.js",
+    "type": "module"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["src/flashcard/index.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
