@@ -1,55 +1,55 @@
-# Voca — English Learning Browser Extension
+# Voca — 英语学习浏览器插件
 
-Read English smarter. Instant hover translation, bilingual YouTube subtitles, and spaced-repetition flashcards.
-
----
-
-## Features
-
-- **Hover Translation** — Click any English word to see its translation, phonetic, and definitions (Google Translate / DeepL / LibreTranslate)
-- **Phrase Translation** — Select any text to translate a full phrase or sentence
-- **Word Bank** — Save words and phrases with one click; view and manage your collection in the popup
-- **Flashcard Review** — SM-2 spaced repetition algorithm, with definitions, synonyms, antonyms, and example sentences
-- **YouTube Bilingual Subtitles** — Auto-loads English CC, translates each line, and syncs with video playback
-- **Desktop Sync** — Syncs your word bank with the Voca desktop app in real time (requires Voca desktop v1.0.4+)
+更聪明地阅读英文。悬停翻译、YouTube 双语字幕、间隔重复闪卡。
 
 ---
 
-## Changelog
+## 功能
+
+- **划词翻译** — 点击任意英文单词，即可查看翻译、音标和词义（支持 Google Translate / DeepL / LibreTranslate）
+- **短语翻译** — 选中任意文本，翻译完整短语或句子
+- **单词本** — 一键收藏单词和短语，在弹窗中查看和管理
+- **闪卡复习** — SM-2 间隔重复算法，展示词义、近反义词和例句
+- **YouTube 双语字幕** — 自动加载英文 CC，逐句翻译并与视频播放同步
+- **桌面端同步** — 与 Voca 桌面版实时共享单词本（需要桌面版 v1.0.4+）
+
+---
+
+## 更新日志
 
 ### v1.0.2 (2026-04-15)
 
-#### Fix
-- Fixed desktop-to-plugin deletion sync: words deleted in the desktop app now correctly disappear from the plugin word bank (previously only additions were synced)
+#### 修复
+- 修复桌面端删除同步：在桌面版删除的单词现在会正确同步到插件端（此前只同步新增）
 
 ---
 
 ### v1.0.1 (2026-04-06)
 
-#### New
-- **Save from phrase panel** — After translating a selection, click ☆ to save directly to your word bank
-- **Hide Chinese subtitles** — Toggle button in the YouTube subtitle panel to hide Chinese translations and focus on English listening
-- **Subtitle context highlight** — The lines before and after the current subtitle are shown with a soft orange background for easier context tracking
-- **Sentence bookmarks** — Each subtitle line now has a ☆ button to save the full sentence (with translation) to your word bank
+#### 新功能
+- **划词收藏**：选中单词或短语翻译后，可直接点击「☆ 收藏」保存到单词本
+- **字幕隐藏中文**：双语字幕面板新增「中文」切换按钮，可一键隐藏中文翻译，专注英语听力训练
+- **字幕上下文高亮**：当前播放字幕的前一句和后一句会显示淡橙色背景，方便追踪语境
+- **字幕句子收藏**：每条字幕右侧新增「☆」按钮，可收藏完整句子（含翻译）到单词本
 
-#### Improved
-- **Word variant matching** — Highlights now match inflected and derived forms:
-  - Plurals: `marquees` → `marquee`, `stories` → `story`
-  - Tenses: `running` → `run`, `stopped` → `stop`, `walked` → `walk`
-  - Comparatives: `biggest` → `big`, `fastest` → `fast`
-  - Derivations: `quickly` → `quick`, `happily` → `happy`, `helpful` → `help`, `darkness` → `dark`, `movement` → `move`
+#### 改进
+- **词形变体识别**：单词本高亮现在能匹配更多变体形式，包括：
+  - 复数：`marquees` → `marquee`、`stories` → `story`
+  - 时态：`running` → `run`、`stopped` → `stop`、`walked` → `walk`
+  - 形容词级别：`biggest` → `big`、`fastest` → `fast`
+  - 派生词：`quickly` → `quick`、`happily` → `happy`、`helpful` → `help`、`darkness` → `dark`、`movement` → `move`
 
-#### Fixed
-- Fixed `icon-16.png` loading error on extension startup
+#### 修复
+- 修复插件加载时报 `icon-16.png` 找不到的错误
 
 ---
 
 ### v1.0.0 (2026-03-xx)
 
-Initial release.
+首次发布。
 
-- Hover translation (Google Translate / DeepL / LibreTranslate)
-- Edit modal: modify source text, switch target language, live re-translation
-- Word bank with memory level tags
-- Flashcard review with SM-2 algorithm
-- YouTube bilingual subtitles synced to video playback
+- 划词悬停翻译（Google Translate / DeepL / LibreTranslate）
+- 编辑弹窗：可修改原文、切换目标语言，实时重翻
+- 单词本：收藏单词，支持记忆等级标签
+- 闪卡复习：SM-2 间隔重复算法，双栏布局展示词义 / 同近义词 / 例句
+- YouTube 双语字幕：自动加载英文 CC，逐句翻译并与视频时间同步
