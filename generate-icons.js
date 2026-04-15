@@ -163,7 +163,7 @@ function generateIcon(size) {
 const outDir = path.join(__dirname, 'public');
 if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-for (const size of [16, 48, 128]) {
+for (const size of [16, 48, 128, 300]) {
   const rgba = generateIcon(size);
   const png  = makePNG(size, size, rgba);
   const file = path.join(outDir, `icon-${size}.png`);

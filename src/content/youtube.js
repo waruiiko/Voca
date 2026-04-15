@@ -11,7 +11,17 @@ let isPanelVisible = false;
 let videoEl = null;
 let translationCache = new Map();
 let captionsLoaded = false;
+let hideZh = false;
+let savedSentences = {};  // text → { text, translation, timestamp }
 let _txSettings = { api: "google", deeplKey: "", langblyKey: "", libreUrl: "http://localhost:5000" };
+
+// 读取已收藏句子
+chrome.storage.local.get("savedSentences", (r) => {
+  savedSentences = r.savedSentences || {};
+});
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.savedSentences) savedSentences = changes.savedSentences.newValue || {};
+});
 
 // 读取翻译设置
 chrome.storage.local.get("settings", (r) => {
@@ -374,6 +384,7 @@ function createPanel() {
     <div class="eh-ph">
       <span class="eh-ph-title">📖 双语字幕</span>
       <div class="eh-ph-right">
+        <button class="eh-ph-zh-toggle" id="eh-ph-zh-toggle" title="隐藏/显示中文翻译">中文</button>
         <span class="eh-ph-count" id="eh-ph-count"></span>
         <button class="eh-ph-close">✕</button>
       </div>
@@ -385,6 +396,11 @@ function createPanel() {
   document.body.appendChild(panelEl);
   listEl = document.getElementById("eh-pl");
   panelEl.querySelector(".eh-ph-close").addEventListener("click", hidePanel);
+  panelEl.querySelector("#eh-ph-zh-toggle").addEventListener("click", () => {
+    hideZh = !hideZh;
+    panelEl.classList.toggle("hide-zh", hideZh);
+    panelEl.querySelector("#eh-ph-zh-toggle").classList.toggle("off", hideZh);
+  });
 }
 
 function renderItems() {
@@ -394,18 +410,43 @@ function renderItems() {
     const div = document.createElement("div");
     div.className = "eh-si";
     div.dataset.index = i;
+    const isSaved = !!savedSentences[cap.text];
     div.innerHTML = `
       <span class="eh-st">${formatTime(cap.startMs)}</span>
       <div class="eh-sc">
         <div class="eh-se">${escapeHtml(cap.text)}</div>
         <div class="eh-sz" data-i="${i}"><span style="color:#444">…</span></div>
       </div>
+      <button class="eh-si-star ${isSaved ? 'saved' : ''}" data-i="${i}" title="收藏此句">${isSaved ? '★' : '☆'}</button>
     `;
-    div.addEventListener("click", () => { if (videoEl) videoEl.currentTime = cap.startMs / 1000; });
+    div.addEventListener("click", (e) => {
+      if (e.target.closest(".eh-si-star")) return;
+      if (videoEl) videoEl.currentTime = cap.startMs / 1000;
+    });
+    div.querySelector(".eh-si-star").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSaveSentence(i, e.currentTarget);
+    });
     frag.appendChild(div);
   });
   listEl.innerHTML = "";
   listEl.appendChild(frag);
+}
+
+function toggleSaveSentence(index, btn) {
+  const cap = captions[index];
+  if (!cap) return;
+  const key = cap.text;
+  if (savedSentences[key]) {
+    delete savedSentences[key];
+    btn.textContent = "☆";
+    btn.classList.remove("saved");
+  } else {
+    savedSentences[key] = { text: cap.text, translation: cap.translation || "", timestamp: Date.now() };
+    btn.textContent = "★";
+    btn.classList.add("saved");
+  }
+  chrome.storage.local.set({ savedSentences });
 }
 
 function updatePanelCount() {
@@ -433,11 +474,15 @@ function showPanelError(msg) {
 function highlightCurrent(index) {
   if (!listEl) return;
   listEl.querySelector(".eh-si.current")?.classList.remove("current");
+  listEl.querySelector(".eh-si.prev")?.classList.remove("prev");
+  listEl.querySelector(".eh-si.next")?.classList.remove("next");
   currentIndex = index;
   if (index < 0) return;
   const item = listEl.querySelector(`.eh-si[data-index="${index}"]`);
   if (!item) return;
   item.classList.add("current");
+  listEl.querySelector(`.eh-si[data-index="${index - 1}"]`)?.classList.add("prev");
+  listEl.querySelector(`.eh-si[data-index="${index + 1}"]`)?.classList.add("next");
   item.scrollIntoView({ behavior: "smooth", block: "center" });
   preTranslate(index);
 }
@@ -532,6 +577,10 @@ function injectStyles() {
     .eh-ph-count { color:#666;font-size:11px; }
     .eh-ph-close { background:transparent;border:none;color:#666;cursor:pointer;font-size:14px;padding:2px 5px;border-radius:4px; }
     .eh-ph-close:hover { background:rgba(255,255,255,.1);color:#fff; }
+    .eh-ph-zh-toggle { background:rgba(232,130,12,.15);border:1px solid rgba(232,130,12,.4);color:#e8820c;cursor:pointer;font-size:11px;padding:2px 8px;border-radius:4px;font-family:inherit;transition:all .15s; }
+    .eh-ph-zh-toggle:hover { background:rgba(232,130,12,.25); }
+    .eh-ph-zh-toggle.off { background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:#555; }
+    #eh-yt-panel.hide-zh .eh-sz { display:none; }
     .eh-pl { flex:1;overflow-y:auto;padding:6px 4px; }
     .eh-pl::-webkit-scrollbar { width:3px; }
     .eh-pl::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12);border-radius:2px; }
@@ -540,15 +589,19 @@ function injectStyles() {
     .eh-pl-error-msg { color:#e07070;line-height:1.6;margin-bottom:16px;white-space:pre-line; }
     .eh-reload-btn { padding:8px 20px;background:#e8820c;border:none;border-radius:8px;color:white;font-size:13px;cursor:pointer;transition:background .15s; }
     .eh-reload-btn:hover { background:#c06a00; }
-    .eh-si { display:flex;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s;border-left:3px solid transparent; }
+    .eh-si { display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s;border-left:3px solid transparent; }
     .eh-si:hover { background:rgba(255,255,255,.05); }
     .eh-si.current { background:rgba(232,130,12,.15);border-left-color:#e8820c; }
+    .eh-si.prev,.eh-si.next { background:rgba(232,130,12,.06);border-left-color:rgba(232,130,12,.25); }
     .eh-st { font-size:11px;color:#555;min-width:34px;padding-top:2px;flex-shrink:0;font-variant-numeric:tabular-nums; }
     .eh-si.current .eh-st { color:#e8820c; }
     .eh-sc { flex:1;min-width:0; }
     .eh-se { font-size:13px;color:#ccc;line-height:1.5;margin-bottom:3px; }
     .eh-si.current .eh-se { color:#fff; }
     .eh-sz { font-size:12px;color:#e8820c;line-height:1.4; }
+    .eh-si-star { background:transparent;border:none;color:#555;cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;line-height:1;transition:color .15s;margin-top:1px; }
+    .eh-si-star:hover { color:#e8820c; }
+    .eh-si-star.saved { color:#e8820c; }
     #eh-yt-toggle { position:fixed;right:20px;bottom:80px;width:40px;height:40px;border-radius:50%;background:#e8820c;border:none;cursor:pointer;z-index:9999;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(232,130,12,.5);transition:transform .15s,background .15s; }
     #eh-yt-toggle:hover { transform:scale(1.08); }
     #eh-yt-toggle.active { background:#b86500; }

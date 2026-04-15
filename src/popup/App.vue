@@ -747,6 +747,7 @@
 import { ref, computed, onMounted, nextTick, toRaw } from "vue";
 import { TIER1, TIER2, TIER3 } from "../shared/wordFrequency.js";
 import { WORD_BOOKS } from "../shared/wordBooks.js";
+import { pullWordsFromDesktop, removeWordFromDesktop } from "../shared/desktopSync.js";
 
 const tab = ref("words");
 const settingsPage = ref("main");
@@ -1375,6 +1376,7 @@ function deleteWord(key) {
     delete saved[key];
     chrome.storage.local.set({ savedWords: saved }, loadWords);
   });
+  removeWordFromDesktop(key);
 }
 
 function confirmClear() {
@@ -1502,12 +1504,9 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".pbook-selector-wrap")) showPBookDropdown.value = false;
 });
 
-onMounted(() => {
-  chrome.storage.local.get(["savedWords", "settings"], (result) => {
-    const saved = result.savedWords || {};
-    wordList.value = Object.entries(saved)
-      .map(([key, val]) => ({ key, ...val }))
-      .sort((a, b) => b.timestamp - a.timestamp);
+onMounted(async () => {
+  chrome.storage.local.get(["savedWords", "settings"], async (result) => {
+    let saved = result.savedWords || {};
     if (result.settings) {
       settings.value = { ...settings.value, ...result.settings };
     }
@@ -1519,6 +1518,18 @@ onMounted(() => {
         }
       });
     }
+    // 从桌面应用合并生词本（仅添加桌面有但本地没有的词）
+    const desktopWords = await pullWordsFromDesktop();
+    if (desktopWords) {
+      let changed = false;
+      for (const [key, word] of Object.entries(desktopWords)) {
+        if (!saved[key]) { saved[key] = word; changed = true; }
+      }
+      if (changed) chrome.storage.local.set({ savedWords: saved });
+    }
+    wordList.value = Object.entries(saved)
+      .map(([key, val]) => ({ key, ...val }))
+      .sort((a, b) => b.timestamp - a.timestamp);
   });
 });
 </script>

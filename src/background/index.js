@@ -1,18 +1,47 @@
 // 后台 Service Worker：翻译 + 复习提醒
 
 // ── 复习提醒（每小时检查一次）──────────────────────────────────────
-function setupReviewAlarm() {
+function setupAlarms() {
   chrome.alarms.get("reviewCheck", (existing) => {
     if (!existing) chrome.alarms.create("reviewCheck", { periodInMinutes: 60 });
   });
+  chrome.alarms.get("desktopSync", (existing) => {
+    if (!existing) chrome.alarms.create("desktopSync", { periodInMinutes: 1 });
+  });
 }
-chrome.runtime.onInstalled.addListener(setupReviewAlarm);
-chrome.runtime.onStartup.addListener(setupReviewAlarm);
-setupReviewAlarm();
+chrome.runtime.onInstalled.addListener(setupAlarms);
+chrome.runtime.onStartup.addListener(setupAlarms);
+setupAlarms();
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "reviewCheck") checkAndNotify();
+  if (alarm.name === "desktopSync") syncFromDesktop();
 });
+
+// ── 桌面应用生词本同步（每分钟从桌面拉取，合并到本地）──────────────
+async function syncFromDesktop() {
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 2000);
+    const res = await fetch('http://127.0.0.1:27149/words', { signal: ctrl.signal });
+    if (!res.ok) return;
+    const desktopWords = await res.json();
+    if (!desktopWords || typeof desktopWords !== 'object') return;
+    const result = await new Promise(r => chrome.storage.local.get('savedWords', r));
+    const local = result.savedWords || {};
+    let changed = false;
+    // 从桌面端新增的词合并到本地
+    for (const [key, word] of Object.entries(desktopWords)) {
+      if (!local[key]) { local[key] = word; changed = true; }
+    }
+    // 桌面端已删除的词，同步删除本地
+    for (const key of Object.keys(local)) {
+      if (!desktopWords[key]) { delete local[key]; changed = true; }
+    }
+    if (changed) await chrome.storage.local.set({ savedWords: local });
+  } catch {}
+}
+syncFromDesktop();
 
 async function checkAndNotify() {
   const hour = new Date().getHours();

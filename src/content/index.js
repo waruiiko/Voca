@@ -6,6 +6,7 @@
 
 import { isDifficultWord, TIER1, TIER2, TIER3 } from "../shared/wordFrequency.js";
 import { WORD_BOOKS } from "../shared/wordBooks.js";
+import { pushWordToDesktop, removeWordFromDesktop } from "../shared/desktopSync.js";
 
 // ---------- 注入样式 ----------
 const styleEl = document.createElement("style");
@@ -188,6 +189,8 @@ styleEl.textContent = `
   .eh-sel-copy-btn:hover, .eh-sel-close-btn:hover, .eh-sel-retry-btn:hover {
     background: rgba(255,255,255,0.15); color: #fff;
   }
+  .eh-sel-star-btn.eh-saved { color: #e8820c; }
+  .eh-sel-star-btn.eh-saved:hover { background: rgba(232,130,12,0.15); }
   .eh-sel-retry-btn { color: #e8820c; }
   /* 翻译面板中生词高亮 */
   .eh-sel-hl-saved {
@@ -272,6 +275,67 @@ styleEl.textContent = `
   #eh-edit-dialog .eh-ed-btn-primary:hover { background: #2563eb; }
 `;
 document.head.appendChild(styleEl);
+
+// ---------- 词干提取（匹配复数/时态/派生词变体）----------
+function stem(word) {
+  const w = word.toLowerCase();
+  const len = w.length;
+  // -ies → -y (stories → story, happily → happy via -ily)
+  if (len > 5 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+  // -ves → -f (leaves → leaf, knives → knife)
+  if (len > 5 && w.endsWith('ves')) return w.slice(0, -3) + 'f';
+  // -ness → base (darkness → dark, happiness → happi)
+  if (len > 7 && w.endsWith('ness')) return w.slice(0, -4);
+  // -ment → base (movement → move, excitement → excit)
+  if (len > 7 && w.endsWith('ment')) return w.slice(0, -4);
+  // -ful → base (helpful → help, beautiful → beauti)
+  if (len > 6 && w.endsWith('ful')) return w.slice(0, -3);
+  // -less → base (helpless → help, endless → end)
+  if (len > 7 && w.endsWith('less')) return w.slice(0, -4);
+  // -ily → -y (happily → happy, heavily → heavy)
+  if (len > 6 && w.endsWith('ily')) return w.slice(0, -3) + 'y';
+  // -ly → base (quickly → quick, slowly → slow)
+  if (len > 5 && w.endsWith('ly')) return w.slice(0, -2);
+  // -ing → base，处理双写辅音 (running → run, walking → walk)
+  if (len > 6 && w.endsWith('ing')) {
+    const base = w.slice(0, -3);
+    if (base.length > 2 && base[base.length - 1] === base[base.length - 2]) return base.slice(0, -1);
+    return base;
+  }
+  // -ed → base，处理双写辅音 (stopped → stop, walked → walk)
+  if (len > 5 && w.endsWith('ed')) {
+    const base = w.slice(0, -2);
+    if (base.length > 2 && base[base.length - 1] === base[base.length - 2]) return base.slice(0, -1);
+    return base;
+  }
+  // -est → base，处理双写辅音 (biggest → big, fastest → fast)
+  if (len > 6 && w.endsWith('est')) {
+    const base = w.slice(0, -3);
+    if (base.length > 2 && base[base.length - 1] === base[base.length - 2]) return base.slice(0, -1);
+    return base;
+  }
+  // -es → base (marquees → marquee, boxes → box)
+  if (len > 4 && w.endsWith('es')) return w.slice(0, -2);
+  // -s → base (cats → cat)，跳过 -ss 结尾
+  if (len > 4 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  // -er → base，处理双写辅音 (bigger → big, walker → walk)
+  if (len > 5 && w.endsWith('er')) {
+    const base = w.slice(0, -2);
+    if (base.length > 2 && base[base.length - 1] === base[base.length - 2]) return base.slice(0, -1);
+    return base;
+  }
+  return w;
+}
+
+// 构建词干映射表：stem → savedKey
+function buildStemMap(keys) {
+  const map = new Map();
+  for (const key of keys) {
+    map.set(key, key);          // 精确匹配
+    map.set(stem(key), key);    // 词干匹配（如 marquee → marquee）
+  }
+  return map;
+}
 
 // ---------- 全局状态 ----------
 let tooltipEl = null;
@@ -361,6 +425,7 @@ function highlightPage() {
 
   const savedKeys = new Set(Object.keys(savedWords));
   if (savedKeys.size === 0 && !settings.highlightDifficult && !hasWordBook) return;
+  const savedStemMap = buildStemMap(savedKeys);
 
   const walker = document.createTreeWalker(
     document.body,
@@ -383,11 +448,11 @@ function highlightPage() {
   while ((node = walker.nextNode())) textNodes.push(node);
 
   for (const textNode of textNodes) {
-    processTextNode(textNode, savedKeys);
+    processTextNode(textNode, savedKeys, savedStemMap);
   }
 }
 
-function processTextNode(textNode, savedKeys) {
+function processTextNode(textNode, savedKeys, savedStemMap) {
   const text = textNode.textContent;
   if (!text || !text.trim()) return;
 
@@ -403,7 +468,9 @@ function processTextNode(textNode, savedKeys) {
     const wordLower = word.toLowerCase();
     let hlClass = null;
 
-    if (settings.highlightSaved && savedKeys.has(wordLower)) {
+    const isSavedMatch = settings.highlightSaved &&
+      (savedKeys.has(wordLower) || savedStemMap.has(stem(wordLower)));
+    if (isSavedMatch) {
       hlClass = "eh-hl-saved";
     } else if (wordBookSet.size > 0 && wordBookSet.has(wordLower) && !savedKeys.has(wordLower)) {
       hlClass = "eh-hl-wordbook";
@@ -637,22 +704,25 @@ function toggleSave(word) {
       });
       if (starBtn) { starBtn.textContent = "☆"; starBtn.classList.remove("eh-saved"); starBtn.title = "收藏单词"; }
     });
+    removeWordFromDesktop(key);
   } else {
     // 收藏：加入生词本
     chrome.storage.local.get("savedWords", (result) => {
       const words = result.savedWords || {};
-      words[key] = {
+      const entry = {
         word,
         translation: tooltipEl?.querySelector(".eh-translation")?.textContent || "",
         context: currentContext,
         timestamp: Date.now(),
         bookId: settings.activePersonalBookId || "default",
       };
+      words[key] = entry;
       chrome.storage.local.set({ savedWords: words }, () => {
         savedWords = words;
         clearHighlights();
         scheduleHighlight();
       });
+      pushWordToDesktop(entry.word, entry.translation, entry.timestamp, 0);
       if (starBtn) { starBtn.textContent = "★"; starBtn.classList.add("eh-saved"); starBtn.title = "取消收藏"; }
     });
   }
@@ -706,19 +776,18 @@ function showSelIcon(rect) {
   document.body.appendChild(selIconEl);
 }
 
-// 将原句中的已保存单词高亮
+// 将原句中的已保存单词高亮（支持词形变体）
 function highlightSavedInText(text) {
   const savedKeys = Object.keys(savedWords);
   if (savedKeys.length === 0) return escapeHtml(text);
-  // 按词长降序，避免短词覆盖长词
-  const sortedKeys = savedKeys.sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(
-    `\\b(${sortedKeys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
-    "gi"
-  );
-  return escapeHtml(text).replace(pattern, (m) =>
-    `<span class="eh-sel-hl-saved">${m}</span>`
-  );
+  const stemMap = buildStemMap(savedKeys);
+  return escapeHtml(text).replace(/\b([a-zA-Z]{3,})\b/g, (match) => {
+    const w = match.toLowerCase();
+    if (stemMap.has(w) || stemMap.has(stem(w))) {
+      return `<span class="eh-sel-hl-saved">${match}</span>`;
+    }
+    return match;
+  });
 }
 
 async function doTranslateSel(rect) {
@@ -803,7 +872,34 @@ async function runTranslation(text) {
       setTimeout(() => { copyBtn.textContent = "📋 复制"; }, 1500);
     });
 
+    const starBtn = document.createElement("button");
+    const savedKey = text.trim().toLowerCase();
+    const alreadySaved = !!savedWords[savedKey];
+    starBtn.className = "eh-sel-copy-btn eh-sel-star-btn" + (alreadySaved ? " eh-saved" : "");
+    starBtn.textContent = alreadySaved ? "★ 已收藏" : "☆ 收藏";
+    starBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      chrome.storage.local.get("savedWords", (result) => {
+        const words = result.savedWords || {};
+        const key = text.trim().toLowerCase();
+        if (words[key]) {
+          delete words[key];
+          starBtn.textContent = "☆ 收藏";
+          starBtn.classList.remove("eh-saved");
+          removeWordFromDesktop(key);
+        } else {
+          const entry = { word: key, translation: translated, timestamp: Date.now(), reviewCount: 0 };
+          words[key] = entry;
+          starBtn.textContent = "★ 已收藏";
+          starBtn.classList.add("eh-saved");
+          pushWordToDesktop(entry.word, entry.translation, entry.timestamp, 0);
+        }
+        chrome.storage.local.set({ savedWords: words }, () => { savedWords = words; });
+      });
+    });
+
     actions.prepend(editBtn);
+    actions.prepend(starBtn);
     actions.prepend(copyBtn);
   } catch (err) {
     if (!selPanelEl) return;
