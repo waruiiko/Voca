@@ -55,13 +55,21 @@ async function syncFromDesktop() {
     if (!res.ok) return;
     const desktopWords = await res.json();
     if (!desktopWords || typeof desktopWords !== 'object') return;
-    const result = await new Promise(r => chrome.storage.local.get('savedWords', r));
-    const local = result.savedWords || {};
+    const stored = await new Promise(r => chrome.storage.local.get(['savedWords', '_lastDesktopKeys'], r));
+    const local = stored.savedWords || {};
+    const prevKeys = new Set(stored._lastDesktopKeys || []);
+    const currentKeys = new Set(Object.keys(desktopWords));
     let changed = false;
+    // 新增：桌面端有但本地没有的词
     for (const [key, word] of Object.entries(desktopWords)) {
       if (!local[key]) { local[key] = word; changed = true; }
     }
+    // 删除：上次在桌面端、现在消失了的词（即桌面端已删除）
+    for (const key of prevKeys) {
+      if (!currentKeys.has(key) && local[key]) { delete local[key]; changed = true; }
+    }
     if (changed) await chrome.storage.local.set({ savedWords: local });
+    await chrome.storage.local.set({ _lastDesktopKeys: [...currentKeys] });
   } catch {}
 }
 syncFromDesktop();
