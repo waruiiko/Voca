@@ -6,7 +6,20 @@
 
 import { isDifficultWord, TIER1, TIER2, TIER3 } from "../shared/wordFrequency.js";
 import { WORD_BOOKS } from "../shared/wordBooks.js";
-import { pushWordToDesktop, removeWordFromDesktop } from "../shared/desktopSync.js";
+function pushWordToDesktop(word, translation, timestamp, reviewCount) {
+  chrome.storage.local.get('_desktopQueue', (r) => {
+    const queue = r._desktopQueue || [];
+    queue.push({ action: 'push', word, translation, timestamp: timestamp || Date.now(), reviewCount: reviewCount || 0 });
+    chrome.storage.local.set({ _desktopQueue: queue });
+  });
+}
+function removeWordFromDesktop(key) {
+  chrome.storage.local.get('_desktopQueue', (r) => {
+    const queue = r._desktopQueue || [];
+    queue.push({ action: 'delete', key });
+    chrome.storage.local.set({ _desktopQueue: queue });
+  });
+}
 
 // ---------- 注入样式 ----------
 const styleEl = document.createElement("style");

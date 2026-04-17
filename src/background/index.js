@@ -18,8 +18,36 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "desktopSync") syncFromDesktop();
 });
 
-// ── 桌面应用生词本同步（每分钟从桌面拉取，合并到本地）──────────────
+// ── 桌面应用生词本同步（每分钟执行：先推送队列，再拉取合并）──────────
 async function syncFromDesktop() {
+  // 先推送本地队列到桌面端
+  try {
+    const qr = await new Promise(r => chrome.storage.local.get('_desktopQueue', r));
+    const queue = qr._desktopQueue || [];
+    if (queue.length > 0) {
+      await chrome.storage.local.remove('_desktopQueue');
+      for (const item of queue) {
+        try {
+          if (item.action === 'push') {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), 3000);
+            await fetch('http://127.0.0.1:27149/words', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ word: item.word, translation: item.translation, timestamp: item.timestamp, reviewCount: item.reviewCount }),
+              signal: ctrl.signal,
+            });
+          } else if (item.action === 'delete') {
+            const ctrl = new AbortController();
+            setTimeout(() => ctrl.abort(), 3000);
+            await fetch(`http://127.0.0.1:27149/words/${encodeURIComponent(item.key)}`, { method: 'DELETE', signal: ctrl.signal });
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  // 再从桌面端拉取最新单词本，合并到本地
   try {
     const ctrl = new AbortController();
     setTimeout(() => ctrl.abort(), 2000);
@@ -30,13 +58,8 @@ async function syncFromDesktop() {
     const result = await new Promise(r => chrome.storage.local.get('savedWords', r));
     const local = result.savedWords || {};
     let changed = false;
-    // 从桌面端新增的词合并到本地
     for (const [key, word] of Object.entries(desktopWords)) {
       if (!local[key]) { local[key] = word; changed = true; }
-    }
-    // 桌面端已删除的词，同步删除本地
-    for (const key of Object.keys(local)) {
-      if (!desktopWords[key]) { delete local[key]; changed = true; }
     }
     if (changed) await chrome.storage.local.set({ savedWords: local });
   } catch {}
@@ -110,7 +133,54 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((err) => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  if (message.type === "PROCESS_DESKTOP_QUEUE") {
+    processDesktopQueue()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  if (message.type === "DESKTOP_PUSH") {
+    const { word, translation, timestamp, reviewCount } = message;
+    fetch('http://127.0.0.1:27149/words', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ word, translation, timestamp: timestamp || Date.now(), reviewCount: reviewCount || 0 }),
+    })
+      .then(r => sendResponse({ ok: r.ok, status: r.status }))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (message.type === "DESKTOP_DELETE") {
+    const { key } = message;
+    fetch(`http://127.0.0.1:27149/words/${encodeURIComponent(key)}`, { method: 'DELETE' })
+      .then(r => sendResponse({ ok: r.ok, status: r.status }))
+      .catch(err => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
 });
+
+async function processDesktopQueue() {
+  const r = await new Promise(resolve => chrome.storage.local.get('_desktopQueue', resolve));
+  const queue = r._desktopQueue || [];
+  if (!queue.length) return;
+  await chrome.storage.local.remove('_desktopQueue');
+  for (const item of queue) {
+    try {
+      if (item.action === 'push') {
+        await fetch('http://127.0.0.1:27149/words', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ word: item.word, translation: item.translation, timestamp: item.timestamp, reviewCount: item.reviewCount }),
+        });
+      } else if (item.action === 'delete') {
+        await fetch(`http://127.0.0.1:27149/words/${encodeURIComponent(item.key)}`, { method: 'DELETE' });
+      }
+    } catch {}
+  }
+}
 
 async function getApiSettings() {
   return new Promise((resolve) => {

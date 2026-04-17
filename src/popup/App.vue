@@ -405,6 +405,15 @@
                 <div class="s-toggle-thumb"></div>
               </div>
             </div>
+            <div class="s-row" @click="syncToDesktop">
+              <span class="s-icon">🖥️</span>
+              <div class="s-label-group">
+                <span class="s-label">同步到桌面端</span>
+                <span class="s-desc" :style="syncStatus.error ? 'color:#e05' : syncStatus.ok ? 'color:#2a9' : ''">{{ syncStatus.msg }}</span>
+              </div>
+              <span v-if="syncStatus.loading" class="s-meta">同步中…</span>
+              <span v-else class="s-arrow">›</span>
+            </div>
             <div class="s-row" @click="exportAllData">
               <span class="s-icon">💾</span>
               <div class="s-label-group">
@@ -751,6 +760,7 @@ import { pullWordsFromDesktop, removeWordFromDesktop } from "../shared/desktopSy
 
 const tab = ref("words");
 const settingsPage = ref("main");
+const syncStatus = ref({ loading: false, ok: false, error: false, msg: '将插件生词本推送到桌面应用' });
 const currentWordBookId = ref("");
 const wbSearchQuery = ref("");
 const wordList = ref([]);
@@ -947,6 +957,42 @@ function doImportPaste() {
   pasteImportText.value = '';
   pasteImportName.value = '';
   showPasteImport.value = false;
+}
+
+// ── 同步到桌面端 ───────────────────────────────────────────────────
+async function syncToDesktop() {
+  if (syncStatus.value.loading) return;
+  syncStatus.value = { loading: true, ok: false, error: false, msg: '同步中…' };
+  try {
+    const r = await new Promise(resolve => chrome.storage.local.get('savedWords', resolve));
+    const words = r.savedWords || {};
+    const entries = Object.values(words);
+    if (entries.length === 0) {
+      syncStatus.value = { loading: false, ok: true, error: false, msg: '生词本为空，无需同步' };
+      setTimeout(() => { syncStatus.value.msg = '将插件生词本推送到桌面应用'; syncStatus.value.ok = false; }, 3000);
+      return;
+    }
+    let success = 0, fail = 0;
+    for (const entry of entries) {
+      try {
+        const res = await fetch('http://127.0.0.1:27149/words', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ word: entry.word, translation: entry.translation, timestamp: entry.timestamp, reviewCount: entry.reviewCount || 0 }),
+        });
+        if (res.ok) success++; else fail++;
+      } catch { fail++; }
+    }
+    if (fail === 0) {
+      syncStatus.value = { loading: false, ok: true, error: false, msg: `已推送 ${success} 个单词` };
+    } else {
+      syncStatus.value = { loading: false, ok: false, error: true, msg: `${success} 个成功，${fail} 个失败（桌面端未运行？）` };
+    }
+    setTimeout(() => { syncStatus.value = { loading: false, ok: false, error: false, msg: '将插件生词本推送到桌面应用' }; }, 4000);
+  } catch (e) {
+    syncStatus.value = { loading: false, ok: false, error: true, msg: '同步失败，请确认桌面端已运行' };
+    setTimeout(() => { syncStatus.value = { loading: false, ok: false, error: false, msg: '将插件生词本推送到桌面应用' }; }, 4000);
+  }
 }
 
 // ── 数据备份与恢复 ────────────────────────────────────────────────
