@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Voca",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Read English smarter. Instant hover translation, bilingual YouTube subtitles, and spaced-repetition flashcards.",
   "permissions": ["storage", "tabs", "downloads", "alarms", "notifications"],
   "host_permissions": ["https://translate.googleapis.com/*", "https://api-free.deepl.com/*", "https://api.mymemory.translated.net/*", "https://api.langbly.com/*", "https://api.dictionaryapi.dev/*", "https://api.anthropic.com/*", "http://localhost/*", "http://127.0.0.1/*"],

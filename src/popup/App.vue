@@ -449,7 +449,7 @@
             <div class="s-row s-row-static">
               <span class="s-icon">ℹ️</span>
               <span class="s-label">版本</span>
-              <span class="s-meta">v1.0.3</span>
+              <span class="s-meta">v1.0.4</span>
             </div>
           </div>
 

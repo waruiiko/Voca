@@ -594,7 +594,16 @@ function speakWord(word) {
   speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(word);
   utt.lang = "en-US";
-  speechSynthesis.speak(utt);
+
+  const voices = speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    speechSynthesis.speak(utt);
+  } else {
+    // macOS: voices load asynchronously, wait for voiceschanged
+    speechSynthesis.addEventListener("voiceschanged", () => {
+      speechSynthesis.speak(utt);
+    }, { once: true });
+  }
 }
 
 function createTooltip(word, autoTranslate = false) {
